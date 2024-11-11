@@ -1,5 +1,7 @@
 
-
+use std::cmp::PartialOrd;
+use std::cmp::Ord;
+use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::ops::{Add, Sub};
 use std::fmt;
@@ -14,7 +16,7 @@ impl PointBuilder {
 
 ///Coordinate struct where the first two fields are x and y, and the second two fields are x_bound and y_bound.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
-struct Point(usize, usize, usize, usize);
+pub struct Point(usize, usize, usize, usize);
 
 impl Point {
     pub fn checked_add(self, other: Self) -> Option<Self> {
@@ -96,76 +98,92 @@ impl Default for Point {
 
 struct Node {
     point: Point,
-    cost: f32
+    cost: u8
 }
 
-struct WormSearch<'a, 'b> {
-    open: Vec<Node>,
-    closed: HashMap<Point, f32>,
-    max_cost: f32,
-    tile_cost: HashMap<usize, f32>,
-    point_builder: &'a PointBuilder,
-    map: &'b Vec<Vec<usize>>
-}
-
-impl<'a, 'b> WormSearch<'a, 'b> {
-    pub fn new(start: Point, max_cost: f32, tile_cost: HashMap<usize, f32>, point_builder: &'a PointBuilder, map: &'b Vec<Vec<usize>>) -> Self {
-        WormSearch {
-            open: (|start| {
-                let mut op = Vec::<Node>::with_capacity(60);
-                op.push(Node {
-                    point: start,
-                    cost: 0.0
-                });
-                op
-            })(start),
-            closed: HashMap::with_capacity(60),
-            max_cost,
-            tile_cost,
-            point_builder,
-            map
-        }
+impl PartialOrd for Node {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(&other))
     }
-   
-    fn run(mut self) -> Vec<Point> {
-        while let Some(node) = self.open.pop() {
-            let neighbors = node.point.check_neighbors();
-            self.closed.insert(node.point, 0.0);
-            for i in neighbors.iter() {
-                if self.closed.get(i).is_none() {
-                    let (x, y) = i.get();
+}
 
-                    if let Some(tile_cost) = self.tile_cost.get(&self.map[x][y]) {
-                        let total_cost = tile_cost + node.cost;
+impl Ord for Node {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.cost.cmp(&other.cost)
+    }
+}
 
-                        if total_cost < self.max_cost {
-                            self.open.push(Node {
-                                point: *i,
-                                cost: total_cost
-                            });
-                            //TODO Error here, Does not check closed to see if shorter path possible
-                        } else if total_cost == self.max_cost {
-                            self.closed.insert(*i, total_cost);
-                        }
+impl Eq for Node {}
 
-                    } else {
-                        panic!("No tile cost exists for tile type {}", &self.map[x][y]);
+impl PartialEq for Node {
+    fn eq(&self, other: &Self) -> bool {
+        self.cost == other.cost
+    }
+}
+
+
+///Generates the list of points reachable from the given starting point.   
+///Node consists of a point, and the cost of reaching that point   
+///closed is a hashmap to make it really fast to check if a point is in it. Let me know if this is dumb
+///
+///TODO Doesn't need to be a distinct object, refactor into just a function
+pub fn worm_search(start: Point, max_cost: u8, tile_cost: HashMap<usize, u8>, map: &Vec<Vec<usize>>) -> Vec<Point> {
+    //Loop while we can pop a node out out of open
+    let mut open = Vec::<Node>::with_capacity(60);
+    open.push(Node {
+        point: start,
+        cost: 0
+    });
+    let mut closed = HashMap::with_capacity(60);
+
+    while let Some(node) = open.pop() {
+        //insert the poped node into closed
+        closed.insert(node.point, node.cost);
+
+        //for each neigbor of our parent node.point(check neighbors handles the bounds check and returns a vec of valid neigbors)
+        for i in node.point.check_neighbors().iter() {
+            //check if a given neigbor is already in closed, and if it is, if the path from the parent node is cheaper than the cost in closed
+            if closed.get(i).filter(|&closed_cost| { node.cost >= *closed_cost }).is_none() {
+                let (x, y) = i.get();
+
+                //get the terrain cost of transversing the tile (and panic if its missing)   
+                //right now the tiles are just integers, might come up with a more complicated solution in the future
+                if let Some(tile_cost) = tile_cost.get(&map[x][y]) {
+                    //get the cost of the new node by adding the terrain cost to the cost of the parent node
+                    let total_cost = tile_cost + node.cost;
+
+                    //if the cost of the new node is less than the maximum allowed cost of the search, push it to open so we can check its neigbors
+                    if total_cost < max_cost {
+                        open.push(Node {
+                            point: *i,
+                            cost: total_cost
+                        });
+                    //if the cost of the new node is equal to the maximum cost, then there isn't any point in checking it's neigbors so just push straight to closed
+                    //if the node was already in closed but we found a better path, insert will automatically override the old value
+                    //NOTE: if we end up having terrain that costs 0 to cost, then this else if should be removed
+                    } else if total_cost == max_cost {
+                        closed.insert(*i, total_cost);
                     }
+
+                } else {
+                    panic!("No tile cost exists for tile type {}", &map[x][y]);
                 }
             }
         }
-        let mut rtn = Vec::with_capacity(60);
-        for i in self.closed.into_iter() {
-            rtn.push(i.0)
-        }
-        rtn
     }
+    //return the nodes in closed as a vec
+    let mut rtn = Vec::with_capacity(60);
+    for i in closed.into_iter() {
+        rtn.push(i.0)
+    }
+    rtn
 }
+
 
 #[cfg(test)]
 mod test {
     use super::HashMap;
-    use super::WormSearch;
+    use super::worm_search;
     use super::PointBuilder;
 
     #[test]
@@ -179,7 +197,7 @@ mod test {
         vec![0,0,0,0,0,0,0,0,0,0],
         vec![0,0,0,2,2,0,0,0,0,0],
         vec![0,1,1,1,1,1,1,0,0,0],
-        vec![0,0,0,0,0,0,0,0,0,0],
+        vec![2,0,0,0,0,0,0,0,0,0],
         vec![0,0,0,0,0,0,0,0,0,0],
         vec![0,0,0,0,0,0,0,0,0,0],
         vec![0,0,0,0,0,0,0,0,0,0],];
@@ -193,18 +211,18 @@ mod test {
         0 0 0 0 2 1 0 0 0 0
         0 0 0 0 0 1 0 0 0 0
         0 0 0 0 0 1 0 0 0 0
-        0 0 0 0 x 0 0 0 0 0
+        0 0 0 0 x 0 2 0 0 0
          */
        
-        let bob = WormSearch::new(start, 5.0, HashMap::from([
-            (0, 1.0),
-            (1, 99.0),
-            (2, 2.0),
-        ]), &point_builder, &test_vec);
+        let bob = worm_search(start, 5, HashMap::from([
+            (0, 1),
+            (1, 99),
+            (2, 2),
+        ]), &test_vec);
         
         //println!("{:?}", bob.run());
 
-        for i in bob.run().into_iter() {
+        for i in bob.into_iter() {
             test_vec[i.0][i.1] = 9;
         }
         for x in test_vec.into_iter() {
