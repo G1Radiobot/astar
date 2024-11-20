@@ -3,6 +3,11 @@
 version = 3
 
 [[package]]
+name = "binary_heap"
+version = "0.1.0"
+source = "git+https://github.com/G1Radiobot/binary_heap#9064ca7ee1b25bbf1870c5bebd55ce3aff0473f5"
+
+[[package]]
 name = "point"
 version = "0.1.0"
 source = "git+https://github.com/G1Radiobot/point#fc7cb4d065bf1248df0ec69cb46291fe94f60c37"
@@ -11,5 +16,6 @@ source = "git+https://github.com/G1Radiobot/point#fc7cb4d065bf1248df0ec69cb46291
 name = "worm_search"
 version = "0.1.0"
 dependencies = [
+ "binary_heap",
  "point",
 ]

@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 point = {git = "https://github.com/G1Radiobot/point"}
+binary_heap = {git = "https://github.com/G1Radiobot/binary_heap"}
