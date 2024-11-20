@@ -33,12 +33,12 @@ impl PartialEq for Node {
     }
 }
 
-
+///Todo Update this description
 ///Generates the list of points reachable from the given starting point.   
 ///`Node` consists of a point, and the cost of reaching that point   
 ///Closed is a hashmap to make it really fast to check if a point is in it.
 pub fn worm_search(start: Point, goal: Point, _max_cost: u16, tile_costs: HashMap<char, u16>, map: &Vec<Vec<char>>) -> Option<Vec<Point>> {
-    let mut open = BinaryHeap::<Node>::with_capacity(60); //Loop while we can pop a node out out of open
+    let mut open = BinaryHeap::<Node>::with_capacity(60);
     open.push(Node {
         point: start,
         prev_point: None,
@@ -86,7 +86,6 @@ pub fn worm_search(start: Point, goal: Point, _max_cost: u16, tile_costs: HashMa
     } else {
         None
     }
-
 }
 
 
