@@ -6,6 +6,7 @@ use point::Point;
 use binary_heap::BinaryHeap;
 
 ///Private struct that contains a point and the cost to reach it.
+#[derive(Clone, Copy)] 
 struct Node {
     point: Point,
     prev_point: Option<Point>,
@@ -36,7 +37,7 @@ impl PartialEq for Node {
 ///Generates the list of points reachable from the given starting point.   
 ///`Node` consists of a point, and the cost of reaching that point   
 ///Closed is a hashmap to make it really fast to check if a point is in it.
-pub fn worm_search(start: Point, goal: Point, _max_cost: u16, tile_cost: HashMap<char, u16>, map: &Vec<Vec<char>>) -> Option<Vec<Point>> {
+pub fn worm_search(start: Point, goal: Point, _max_cost: u16, tile_costs: HashMap<char, u16>, map: &Vec<Vec<char>>) -> Option<Vec<Point>> {
     let mut open = BinaryHeap::<Node>::with_capacity(60); //Loop while we can pop a node out out of open
     open.push(Node {
         point: start,
@@ -44,51 +45,44 @@ pub fn worm_search(start: Point, goal: Point, _max_cost: u16, tile_cost: HashMap
         cost: 0
     });
     let mut closed = HashMap::with_capacity(60);
-
-    if let Some(_) = loop {
-        if let Some(node) = open.pop() {
-            closed.insert(node.point, (node.cost, node.prev_point)); //insert the poped node into closed
-            if node.point == goal {break Some(node.point)};
-
-            for i in node.point.check_neighbors().iter() { //for each neigbor of our parent node.point(check neighbors handles the bounds check and returns a vec of valid neigbors)
-                let (x, y) = i.get(); 
-                if let Some(tile_cost) = tile_cost.get(&map[x][y]) { //get the terrain cost of transversing the tile (and panic if its missing) right now the tiles are just chars, might come up with a more complicated solution in the future
-                    let total_cost = tile_cost + node.cost;
-                    //TODO algorithim isn't taking lowest cost possible path. Probably a problem right here
-                    //WARNING making node.cost > instead of >= causes an infinite loop
-                    if closed.get(i).filter(|&closed_cost| { total_cost >= closed_cost.0 }).is_none() { //check if a given neigbor is already in closed, and if it is, if the path from the parent node is cheaper than the cost in closed
-                        open.push(Node {
-                            point: *i,
-                            prev_point: Some(node.point),
-                            cost: total_cost
-                        });
-                        }
-                } else {
-                    panic!("No tile cost exists for tile type {}", &map[x][y]);
+    let mut path: Vec<Point>;
+    if loop {
+        if let Some(cur_node) = open.pop() {
+            if !closed.contains_key(&cur_node.point) {
+                closed.insert(cur_node.point, cur_node);
+                if cur_node.point == goal {
+                    break true
                 }
-                
+                for i in cur_node.point.check_neighbors() {
+                    if !closed.contains_key(&i) {
+                        let (x, y) = cur_node.point.get();
+                        let total_cost;
+                        if let Some(move_cost) = tile_costs.get(&map[x][y]) {
+                            total_cost = cur_node.cost + move_cost;
+                        } else {
+                            panic!("Terrain type {} is missing from cost hashmap.", &map[x][y]);
+                        }
+                        open.push(Node {
+                            point: i,
+                            prev_point: Some(cur_node.point),
+                            cost: total_cost
+                        })
+                    }
+                }
             }
         } else {
-            break None;
+            break false
         }
     } {
-        let mut rtn = Vec::with_capacity(60);
-        rtn.push(goal);
         let mut cur_point = goal;
-        loop {
-            if let Some(prev_node_tuple) = closed.get(&cur_point) {
-                if let Some(prev_node) = prev_node_tuple.1 {
-                    rtn.push(prev_node);
-                    cur_point = prev_node;
-                } else {
-                    break
-                }
-            } else {
-                let (x, y) = cur_point.get();
-                panic!("Point: {{{}, {}}} is not present in closed.", x, y);
-            }
+        path = vec![goal];
+        while let Some(prev_point) = closed.get(&cur_point).and_then(|closed_node| {
+            closed_node.prev_point
+        }) {
+            cur_point = prev_point;
+            path.push(cur_point);
         }
-        Some(rtn)
+        Some(path)
     } else {
         None
     }
@@ -111,8 +105,8 @@ mod test {
         vec!['f','f','f','f','f','f','f','f','f','f'],
         vec!['e','e','e','e','e','e','e','e','e','e'],
         vec!['e','e','e','e','e','e','e','e','e','e'],
-        vec!['e','e','e','f','e','e','e','e','e','e'],
-        vec!['e','e','e','f','f','e','e','e','e','e'],
+        vec!['e','e','e','f','e','f','e','e','e','e'],
+        vec!['e','e','e','f','f','f','e','e','e','e'],
         vec!['e','w','w','w','w','w','w','e','e','e'],
         vec!['f','e','e','e','e','e','e','e','e','e'],
         vec!['e'; 10],
@@ -123,25 +117,27 @@ mod test {
         f e e e e G e e e e
         f e e e e e e e e e
         f e e e e w e e e e
-        f e e e e w e e e e
+        f e e f f w e e e e
         f e e e f w e e e e
-        f e e e f w e e e e
+        f e e f f w e e e e
         f e e e e w e e e e
         f e e e e w e e e e
         f e e e x e f e e e
          */
 
         let bob = worm_search(start, goal, 50, HashMap::from([
-            (char::from('e'), 10),
+            (char::from('e'), 1),
             (char::from('w'), 1000),
-            (char::from('f'), 20),
+            (char::from('f'), 2),
         ]), &test_vec);
         
         //println!("{:?}", bob.run());
-
+        let mut it = 0;
         for i in bob.unwrap().into_iter() {
+            
             let (x, y) = i.get();
-            test_vec[x][y] = 'P';
+            test_vec[x][y] = char::from_digit(it, 10).unwrap();
+            it += 1;
         }
         for x in test_vec.into_iter() {
             for y in x.into_iter() {
