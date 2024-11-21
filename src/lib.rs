@@ -37,7 +37,7 @@ impl PartialEq for Node {
 ///Generates the list of points reachable from the given starting point.   
 ///`Node` consists of a point, and the cost of reaching that point   
 ///Closed is a hashmap to make it really fast to check if a point is in it.
-pub fn worm_search(start: Point, goal: Point, _max_cost: u16, tile_costs: HashMap<char, u16>, map: &Vec<Vec<char>>) -> Option<Vec<Point>> {
+pub fn worm_search(start: Point, goal: Point, tile_costs: HashMap<char, u16>, map: &Vec<Vec<char>>, heuristic: fn(&Point, &Point) -> u16) -> Option<Vec<Point>> {
     let mut open = BinaryHeap::<Node>::with_capacity(60);
     open.push(Node {
         point: start,
@@ -46,6 +46,7 @@ pub fn worm_search(start: Point, goal: Point, _max_cost: u16, tile_costs: HashMa
     });
     let mut closed = HashMap::with_capacity(60);
     let mut path: Vec<Point>;
+    let mut test = 0;
     if loop {
         if let Some(cur_node) = open.pop() {
             if !closed.contains_key(&cur_node.point) {
@@ -55,10 +56,12 @@ pub fn worm_search(start: Point, goal: Point, _max_cost: u16, tile_costs: HashMa
                 }
                 for i in cur_node.point.check_neighbors() {
                     if !closed.contains_key(&i) {
-                        let (x, y) = cur_node.point.get();
+                        let (x, y) = i.get();
                         let total_cost;
                         if let Some(move_cost) = tile_costs.get(&map[x][y]) {
-                            total_cost = cur_node.cost + move_cost;
+                            total_cost = cur_node.cost + move_cost + heuristic(&cur_node.point, &goal);
+                            println!("{},  {}", total_cost, test);
+                            test = test + 1;
                         } else {
                             panic!("Terrain type {} is missing from cost hashmap.", &map[x][y]);
                         }
@@ -124,11 +127,11 @@ mod test {
         f e e e x e f e e e
          */
 
-        let bob = worm_search(start, goal, 50, HashMap::from([
-            (char::from('e'), 1),
+        let bob = worm_search(start, goal, HashMap::from([
+            (char::from('e'), 10),
             (char::from('w'), 1000),
-            (char::from('f'), 2),
-        ]), &test_vec);
+            (char::from('f'), 20),
+        ]), &test_vec, |_, _| {0});
         
         //println!("{:?}", bob.run());
         let mut it = 0;
